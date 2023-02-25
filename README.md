@@ -32,11 +32,10 @@ This is a **very early-stage** Figma plugin to export Figma files to Penpot form
 - [Table of contents](#table-of-contents)
 - [Why a Figma exporter](#why-a-figma-exporter)
 - [Getting started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Install dependencies](#install-dependencies)
-  - [Build the plugin](#build-the-plugin)
-  - [Add the plugin to Figma](#add-the-plugin-to-figma)
-  - [Launch the plugin and exporting a penpot file](#launch-the-plugin-and-exporting-a-penpot-file)
+  - [Pre-requisites](#pre-requisites)
+  - [Building](#building)
+  - [Add to Figma](#add-to-figma)
+  - [To use the plugin](#to-use-the-plugin)
 - [Call to the community](#call-to-the-community)
 - [What can this plugin currently import?](#what-can-this-plugin-currently-import)
 - [Limitations](#limitations)
@@ -54,28 +53,47 @@ There is a sense of urgency for this capability because there is a feeling that 
 
 This plugin makes use of npm, webpack and react, and is written on TypeScript. It also includes a Penpot file builder library.
 
-### Prerequisites
-* node / npm
+### Pre-requisites
 
-### Install dependencies
-```
-npm install
-```
+To use this plugin, you will need to have `node` and `npm` installed on your computer. If you don't already have these, you can download and install them from the official website ([https://nodejs.org/en/](https://nodejs.org/en/)).
 
-### Build the plugin
-```
-npm run build
-```
+Once you have `node` and `npm` installed, you will need to download the source code for this plugin. You can do this by clicking the "Clone or download" button on the GitHub page for this project and then selecting "Download ZIP". Extract the ZIP file to a location on your computer.
+### Building
 
-### Add the plugin to Figma
+#### For Windows users:
+
+1.  Open the terminal by searching for "Command Prompt" in the start menu.
+2.  Use the `cd` command to navigate to the folder where the repository has been extracted. For example, if the repository is located in the `Downloads` folder, you can use the following command: `cd Downloads/figma-exporter`.
+3.  Once you are in the correct folder, you can run the `npm install` command to install the dependencies, and then the `npm run build` command to build the plugin.
+
+#### For Mac users:
+
+1.  Open the terminal by searching for "Terminal" in the Launchpad or by using the `Command + Space` keyboard shortcut and searching for "Terminal".
+2.  Use the `cd` command to navigate to the folder where the repository has been extracted. For example, if the repository is located in the `Downloads` folder, you can use the following command: `cd Downloads/figma-exporter`.
+3.  Once you are in the correct folder, you can run the `npm install` command to install the dependencies, and then the `npm run build` command to build the plugin.
+
+#### For Linux users:
+
+1.  Open the terminal by using the `Ctrl + Alt + T` keyboard shortcut.
+2.  Use the `cd` command to navigate to the folder where the repository has been extracted. For example, if the repository is located in the `Downloads` folder, you can use the following command: `cd Downloads/figma-exporter`.
+3.  Once you are in the correct folder, you can run the `npm install` command to install the dependencies, and then the `npm run build` command to build the plugin.
+
+### Add to Figma
 `Figma menu` > `Plugins` > `Development` > `Import plugin from manifest…`
+To add the plugin to Figma, open Figma and go to the `Plugins` menu. Select `Development` and then choose `Import plugin from manifest…`. 
 
-And choose the manifest.json file
+<img src="resources/Import plugin from manifest.png" alt='Screenshot of the Plugins > Development menus open showing the, "Import plugin from manifest" option.'>
 
-### Launch the plugin and exporting a penpot file
-`Figma menu` > `Plugins` > `Development` > `Penpot Exporter`
+Select the `manifest.json` file that is located in the folder where you extracted the source code for the plugin.
 
-This will generate a .zip file that you can import from penpot
+
+### To use the plugin
+
+1. Select what you want to export
+2. `Figma menu` > `Plugins` > `Development` > `Penpot Exporter`
+go to the `Plugins` menu in Figma and select `Development` followed by `Penpot Exporter`. 
+3. This will generate a .zip file that you can import into Penpot.
+
 
 ## Call to the community ##
 

@@ -8,16 +8,26 @@ import slugify from "slugify";
 
 declare function require(path: string): any;
 
+// Open resources/gfonts.json and create a set of matched font names
+const gfonts = new Set();
+require("./gfonts.json").forEach((font) => gfonts.add(font));
 
 type PenpotExporterProps = {
+}
+
+type FigmaImageData = {
+  value: string,
+  width: number,
+  height: number
 }
 
 type PenpotExporterState = {
   isDebug: boolean,
   penpotFileData: string
+  missingFonts: Set<string>
   figmaFileData: string
   figmaRootNode: NodeData
-  images: { [id: string] : string; };
+  images: { [id: string] : FigmaImageData; };
 }
 
 export default class PenpotExporter extends React.Component<PenpotExporterProps, PenpotExporterState> {
@@ -25,6 +35,7 @@ export default class PenpotExporter extends React.Component<PenpotExporterProps,
     isDebug: false,
     penpotFileData: "",
     figmaFileData: "",
+    missingFonts: new Set(),
     figmaRootNode: null,
     images: {}
   };
@@ -32,6 +43,11 @@ export default class PenpotExporter extends React.Component<PenpotExporterProps,
   componentDidMount = () => {
     window.addEventListener("message", this.onMessage);
   }
+
+  componentDidUpdate = () => {
+    this.setDimensions();
+  }
+
   componentWillUnmount = () =>{
     window.removeEventListener('message', this.onMessage);
   }
@@ -77,6 +93,7 @@ export default class PenpotExporter extends React.Component<PenpotExporterProps,
   }
 
   translateFill(fill, width, height){
+
     if (fill.type === "SOLID"){
       return this.translateSolidFill(fill);
     } else if (fill.type === "GRADIENT_LINEAR"){
@@ -92,6 +109,13 @@ export default class PenpotExporter extends React.Component<PenpotExporterProps,
     let penpotFill = null;
     for (var fill of fills){
       penpotFill = this.translateFill(fill, width, height);
+
+      // Penpot does not track fill visibility, so if the Figma fill is invisible we
+      // force opacity to 0
+      if (fill.visible === false){
+        penpotFill.fillOpacity = 0;
+      }
+
       if (penpotFill !== null){
         penpotFills.unshift(penpotFill);
       }
@@ -99,25 +123,27 @@ export default class PenpotExporter extends React.Component<PenpotExporterProps,
     return penpotFills;
   }
 
+  addFontWarning(font){
+    const newMissingFonts = this.state.missingFonts;
+    newMissingFonts.add(font);
+
+    this.setState(_ => ({missingFonts: newMissingFonts }));
+  }
+
   createPenpotPage(file, node){
     file.addPage(node.name);
     for (var child of node.children){
       this.createPenpotItem(file, child, 0, 0);
-      if (child.fills) {
-        for (var fill of child.fills ){
-          if (fill.type === "IMAGE"){
-            this.createPenpotImage(file, child, 0, 0, this.state.images[fill.imageHash]);
-          }
-        }
-      }
     }
     file.closePage();
   }
 
   createPenpotBoard(file, node, baseX, baseY){
-    file.addArtboard({ name: node.name, x: node.x - baseX, y: node.y - baseY, width: node.width, height: node.height });
+    file.addArtboard({ name: node.name, x: node.x + baseX, y: node.y + baseY, width: node.width, height: node.height,
+      fills: this.translateFills(node.fills, node.width, node.height)
+    });
     for (var child of node.children){
-      this.createPenpotItem(file, child, node.x - baseX, node.y - baseY);
+      this.createPenpotItem(file, child, node.x + baseX, node.y + baseY);
     }
     file.closeArtboard();
   }
@@ -166,8 +192,44 @@ export default class PenpotExporter extends React.Component<PenpotExporterProps,
     return style.toLowerCase().replace(/\s/g, "")
   }
 
+  getTextDecoration(node){
+    const textDecoration = node.textDecoration;
+    if (textDecoration === "STRIKETHROUGH"){
+      return "line-through";
+    }
+    if (textDecoration === "UNDERLINE"){
+      return "underline";
+    }
+    return "none";
+  }
+
+  getTextTransform(node){
+    const textCase = node.textCase;
+    if (textCase === "UPPER"){
+      return "uppercase";
+    }
+    if (textCase === "LOWER"){
+      return "lowercase";
+    }
+    if (textCase === "TITLE"){
+      return "capitalize";
+    }
+    return "none";
+  }
+
+  validateFont(fontName) {
+    const name = slugify(fontName.family.toLowerCase());
+    if (!gfonts.has(name)) {
+      this.addFontWarning(name);
+    }
+  }
+
   createPenpotText(file, node, baseX, baseY){
+
     const children = node.children.map((val) => {
+
+      this.validateFont(val.fontName);
+
       return {
         lineHeight: val.lineHeight,
         fontStyle: "normal",
@@ -176,13 +238,15 @@ export default class PenpotExporter extends React.Component<PenpotExporterProps,
         fontSize: val.fontSize.toString(),
         fontWeight: val.fontWeight.toString(),
         fontVariantId: this.translateFontStyle(val.fontName.style),
-        textDecoration: "none",
-        textTransform: "none",
+        textDecoration: this.getTextDecoration(val),
+        textTransform: this.getTextTransform(val),
         letterSpacing: val.letterSpacing,
         fills: this.translateFills(val.fills, node.width, node.height),
         fontFamily: val.fontName.family,
         text: val.characters }
       });
+
+    this.validateFont(node.fontName);
 
     file.createText({
       name: node.name,
@@ -201,13 +265,13 @@ export default class PenpotExporter extends React.Component<PenpotExporterProps,
             lineHeight: node.lineHeight,
             fontStyle: "normal",
             children: children,
-            textTransform: "none",
+            textTransform: this.getTextTransform(node),
             textAlign: this.translateHorizontalAlign(node.textAlignHorizontal),
             fontId: "gfont-" + slugify(node.fontName.family.toLowerCase()),
             fontSize: node.fontSize.toString(),
             fontWeight: node.fontWeight.toString(),
             type: "paragraph",
-            textDecoration: "none",
+            textDecoration: this.getTextDecoration(node),
             letterSpacing: node.letterSpacing,
             fills: this.translateFills(node.fills, node.width, node.height),
             fontFamily: node.fontName.family
@@ -218,17 +282,51 @@ export default class PenpotExporter extends React.Component<PenpotExporterProps,
   }
 
   createPenpotImage(file, node, baseX, baseY, image){
-    file.createImage({ name: node.name, x: node.x + baseX, y: node.y + baseY, width: node.width, height: node.height,
+    file.createImage({ name: node.name, x: node.x + baseX, y: node.y + baseY, width: image.width, height: image.height,
       metadata: {
-        width: node.width,
-        height: node.height
+        width: image.width,
+        height: image.height
       },
-      dataUri: image
+      dataUri: image.value
     });
   }
 
+  calculateAdjustment(node){
+    // For each child, check whether the X or Y position is less than 0 and less than the
+    // current adjustment.
+    let adjustedX = 0;
+    let adjustedY = 0;
+    for (var child of node.children){
+      if (child.x < adjustedX){
+        adjustedX = child.x;
+      }
+      if (child.y < adjustedY){
+        adjustedY = child.y;
+      }
+    }
+    return [adjustedX, adjustedY];
+  }
+
   createPenpotItem(file, node, baseX, baseY){
-    if (node.type == "PAGE"){
+
+    // We special-case images because an image in figma is a shape with one or many
+    // image fills.  Given that handling images in Penpot is a bit different, we
+    // rasterize a figma shape with any image fills to a PNG and then add it as a single
+    // Penpot image.  Implication is that any node that has an image fill will only be
+    // treated as an image, so we skip node type checks.
+    const hasImageFill = node.fills?.some(fill => fill.type === "IMAGE");
+    if (hasImageFill){
+
+      // If the nested frames extended the bounds of the rasterized image, we need to
+      // account for this both in position on the canvas and the calculated width and
+      // height of the image.
+      const [adjustedX, adjustedY] = this.calculateAdjustment(node);
+      const width = node.width + Math.abs(adjustedX);
+      const height = node.height + Math.abs(adjustedY);
+
+      this.createPenpotImage(file, node, baseX + adjustedX, baseY + adjustedY, this.state.images[node.id]);
+    }
+    else if (node.type == "PAGE"){
       this.createPenpotPage(file, node);
     }
     else if (node.type == "FRAME"){
@@ -275,28 +373,67 @@ export default class PenpotExporter extends React.Component<PenpotExporterProps,
         figmaRootNode: event.data.pluginMessage.data}));
     }
     else if (event.data.pluginMessage.type == "IMAGE") {
+
       const data = event.data.pluginMessage.data;
-      this.setState(state =>
-        {
-          state.images[data.imageHash] = data.value;
-          return state;
-        }
-      ) ;
+      const image = document.createElement('img');
+      const thisObj = this;
+
+      image.addEventListener('load', function() {
+        // Get byte array from response
+        thisObj.setState(state =>
+            {
+              state.images[data.id] = {
+                value: data.value,
+                width: image.naturalWidth,
+                height: image.naturalHeight
+              };
+              return state;
+            }
+        );
+      });
+      image.src = data.value;
+
     }
+  }
+
+  setDimensions = () => {
+
+    const isMissingFonts = this.state.missingFonts.size > 0;
+
+    let width = 300;
+    let height = 280;
+
+    if (isMissingFonts) {
+      height += (this.state.missingFonts.size * 20);
+      width = 400;
+    }
+
+    if (this.state.isDebug){
+      height += 600;
+      width = 800;
+    }
+
+    parent.postMessage({ pluginMessage: { type: "resize", width: width, height: height } }, "*");
   }
 
   toggleDebug = (event) => {
     const isDebug = event.currentTarget.checked;
-    this.setState (state => ({isDebug: isDebug}))
-    if (isDebug){
-      parent.postMessage({ pluginMessage: { type: "resize", width:800, height:800 } }, "*");
-    } else {
-      parent.postMessage({ pluginMessage: { type: "resize", width:300, height:200 } }, "*");
-    }
+    this.setState (state => ({isDebug: isDebug}));
+  }
+
+  renderFontWarnings = () => {
+    return (
+      <ul >
+        {Array.from(this.state.missingFonts).map((font) => (
+          <li key={font}>{font}</li>
+        ))}
+      </ul>
+    );
   }
 
   render() {
 
+    // Update the dimensions of the plugin window based on available data and selections
     return (
       <main>
         <header>
@@ -304,7 +441,14 @@ export default class PenpotExporter extends React.Component<PenpotExporterProps,
           <h2>Penpot Exporter</h2>
         </header>
         <section>
-          <div>
+          <div style={{display:this.state.missingFonts.size > 0 ? "inline" : "none"}}>
+            <div id="missing-fonts">{this.state.missingFonts.size} non-default font{this.state.missingFonts.size > 1 ? 's' : ''}: </div>
+            <small>Ensure fonts are installed in Penpot before importing.</small>
+            <div id="missing-fonts-list">
+              {this.renderFontWarnings()}
+            </div>
+          </div>
+          <div >
             <input type="checkbox" id="chkDebug" name="chkDebug" onChange={this.toggleDebug}/>
             <label htmlFor="chkDebug">Show debug data</label>
           </div>
